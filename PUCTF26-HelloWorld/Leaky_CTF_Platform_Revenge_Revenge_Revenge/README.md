@@ -1,6 +1,6 @@
 # Leaky CTF Platform Revenge Revenge Revenge - Writeup
 
-## Files related to solving the challenge are in the [solve](./solve) folder
+## Files related to solving the challenge are in the root directory
 
 ## Please open issue should you have any questions. It will be added to the respective Q&A section.
 
@@ -224,7 +224,7 @@ A - `fetch()` with `no-cors` still sends cookie (Lax), but timing is noisy. Navi
 
 ## The Exploit
 
-Full exploit (also in [`./solve/solve.py`](./solve/solve.py))
+Full exploit (also in [`./solve.py`](./solve.py))
 
 <details open>
   <summary><b>Click to open/close the solve script</b></summary>
