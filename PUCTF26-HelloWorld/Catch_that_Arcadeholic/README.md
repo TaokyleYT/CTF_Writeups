@@ -17,7 +17,7 @@ He even sent a picture and make laugh to us!!! Bloody annoying!\
 Please help us to find his location base on his picture.\
 Wait? What do you mean he took a flight to leave???\
 ==================================================\
-flag format: PUCTF26{[Arcade brand name]_[Building brand name]_[Name of the suburb where the picture was taken]_[Postcode where the picture was taken]_[Nearest Bus stop's stop ID]_[Nearest Supermarket from the arcade centre]_[MD5 hash value of the challenge title name]}\
+flag format: PUCTF26{[Arcade brand name]\_[Building brand name]\_[Name of the suburb where the picture was taken]\_[Postcode where the picture was taken]\_[Nearest Bus stop's stop ID]\_[Nearest Supermarket from the arcade centre]\_[MD5 hash value of the challenge title name]}\
 If there is space in the name, use "_" to replace\
 Example: "Hello World" --> "Hello_World"
 
@@ -115,7 +115,7 @@ Also hol'up before we go googling again, timezone is not a claw machine brand bu
 ## Googling go brr - checkpoint Q&A
 
 **Q - Why don't you use [Ziv arcade database](https://zenius-i-vanisher.com/v5.2/arcades.php)? This one is also in sdvx.org**\
-A - It seems that there is only 2 valkyrie sdvx from ziv but 5 in vmsearch, so I assume that ~~ziv got skill issue and ~~ the data are outdated. Always increase your workload to prevent overlooking important info
+A - It seems that there is only 2 valkyrie sdvx from ziv but 5 in vmsearch, so I assume that ~~ziv got skill issue and~~ the data are outdated. Always increase your workload to prevent overlooking important info
 
 ## Compare the arcades
 
@@ -127,7 +127,7 @@ At Highpoint
 
 ![Highpoint_sdvx.jpg](./img/Highpoint_sdvx.jpg)
 
--# from [reddit](https://www.reddit.com/r/rhythmgames/comments/12d847l/welcoming_sdvx_to_timezne_highpoint/)
+<sub>from [reddit](https://www.reddit.com/r/rhythmgames/comments/12d847l/welcoming_sdvx_to_timezne_highpoint/)</sub>
 
 There is no maimai next to the sdvx, OUT!
 
@@ -143,7 +143,7 @@ At Haymarket
 
 ![Haymarket_maimai.jpg](./img/Haymarket_maimai.jpg)
 
--# from [facebook](https://www.facebook.com/photo/?fbid=936887014900857)
+<sub>from [facebook](https://www.facebook.com/photo/?fbid=936887014900857)</sub>
 
 The maimais are right in front of the wall, and there is no truss, OUT!
 
@@ -153,7 +153,7 @@ In Brisbane, we only have 1 arcade, since all other 4 arcades are out I think th
 
 ![Garden_maimai.png](./img/Garden_maimai.png)
 
--# from [google map](https://www.google.com/maps/place/Timezone+%26+Zone+Bowling+Garden+City/@-27.5625793,153.0799418,3a,75y,90t/data=!3m8!1e2!3m6!1sCIHM0ogKEICAgICflcfC_AE!2e10!3e12!6shttps:%2F%2Flh3.googleusercontent.com%2Fgps-cs-s%2FAHVAwer82einXBU16SsyWasCkrzG2gfqGcz04P7recHaqSAJME81CBxCvXZk-Ph2rPYFzf6zS50_uLboZW_D38PHdvpqS3g3xNZxajMx4y236Opn6O--3JFYojtT9-biwVdxqn8G4PVe%3Dw203-h270-k-no!7i3000!8i4000!4m7!3m6!1s0x6b9145ada0fa24d9:0x5b347b7c5239e9d4!8m2!3d-27.5625793!4d153.0799418!10e5!16s%2Fg%2F11g_zk2bws?entry=ttu&g_ep=EgoyMDI2MDMxMS4wIKXMDSoASAFQAw%3D%3D)
+<sub>from [google map](https://www.google.com/maps/place/Timezone+%26+Zone+Bowling+Garden+City/@-27.5625793,153.0799418,3a,75y,90t/data=!3m8!1e2!3m6!1sCIHM0ogKEICAgICflcfC_AE!2e10!3e12!6shttps:%2F%2Flh3.googleusercontent.com%2Fgps-cs-s%2FAHVAwer82einXBU16SsyWasCkrzG2gfqGcz04P7recHaqSAJME81CBxCvXZk-Ph2rPYFzf6zS50_uLboZW_D38PHdvpqS3g3xNZxajMx4y236Opn6O--3JFYojtT9-biwVdxqn8G4PVe%3Dw203-h270-k-no!7i3000!8i4000!4m7!3m6!1s0x6b9145ada0fa24d9:0x5b347b7c5239e9d4!8m2!3d-27.5625793!4d153.0799418!10e5!16s%2Fg%2F11g_zk2bws?entry=ttu&g_ep=EgoyMDI2MDMxMS4wIKXMDSoASAFQAw%3D%3D)</sub>
 
 PERFECT! The truss matches, slightly sees the sdvx on the left, and the exit sign and the grassy pillar and etc
 

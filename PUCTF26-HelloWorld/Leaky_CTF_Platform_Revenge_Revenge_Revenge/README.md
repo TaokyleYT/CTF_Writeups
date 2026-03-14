@@ -76,16 +76,16 @@ Linear search from beginning with correct flag at index 0? It is screaming timin
 Correct prefix -> hits index 0 instantly -> fast return\
 Wrong prefix -> scans **all** of the many fake flags-> slow
 
-And voila we have a `/spam_flag` endpoint to populate the flags list quickly, how convenient <sub>lol</sub>
+And voila we have a `/spam_flag` endpoint to populate the flags list quickly, how convenient <sub>*lol*</sub>
 
-Sadly, only admin has access to this vulnerable `/search` endpoint, because before the linear search where the timing difference take place, we have this cookie check.
+Sadly, **only admin** has access to this vulnerable `/search` endpoint, because before the linear search where the timing difference take place, we have this cookie check.
 
 ```py
 if request.cookies.get('admin_secret', '') != config.ADMIN_SECRET:
         return 'Access denied. Only admin can access this endpoint.', 403
 ```
 
-Thats unfortunate, we are not admin, but we have access to the `/report` endpoint, which ~~slaves~~ the admin bot to make a request to a user-provided URL, how convenient (again).
+Thats unfortunate, we are not admin, but we do have access to the `/report` endpoint, where we can ~~slaves~~ the admin bot to make a request to a user-provided URL, how convenient (again).
 
 ## Vuln? Where - checkpoint Q&A
 
@@ -98,28 +98,28 @@ Since the bot is our entry point, lets take a closer look at it (bot.py)
 
 The bot sets `admin_secret` cookie for domain `localhost` with `SameSite=Lax` + `HttpOnly`, and then visits a user-supplied URL for 60 seconds.
 
-With this cookie settings, we cannot use `fetch()` (cross-origin) or `document.cookie` (violates HttpOnly) to leak the admin cookie, so we have to make the bot visit `/search` endpoint.
+With this cookie settings, we **cannot** use `fetch()` (cross-origin) or `document.cookie` (violates HttpOnly) to leak the admin cookie, so we have to make the bot visit `/search` endpoint.
 
 However, because it's Lax, top-level navigations (e.g. `window.location = ...` or `win.location = ...` in a popup) **will send** the cookie to `http://localhost:5000` and thus `/search`.
 
 We cannot read the response body (SOP), but we **can** measure how long a popup stays same-origin before the cross-origin navigation commits.
 
-- Fast commit time -> prefix matched (hit index 0) -> page loaded quickly
-- Slow commit time -> full scan -> page took longer to respond
+- prefix matched (hit index 0) -> page loaded quickly -> Fast commit time
+- full scan (miss)   -> page took longer to respond   -> Slow commit time
 
 ## The convenient admin bot - checkpoint Q&A
 
 **Q - Ok this Q should be on the last checkpoint but this checkpoint is empty so Ima place it here (Im sorry)**\
 **How and why does the timing oracle attack work?**\
 A - Picture this:\
-we have an array of ["yay1", "no3", "no2", "no4", "no9", "no6"], we can any it, and we want to see the value behind yay
+we have an array of ["yay1", "no3", "no2", "no4", "no9", "no6"], we can search it using the `foundFlag` logic above, and we want to see the value behind yay
 
-`any()` uses linear search, if we search for yay, it will see the first item, it is yay, since this query found a matching item, regardless of there being another match later on `any()` will still return true, it exits early as a builtin optimization, lets say this search took 1ms\
-If we search for no, it will see yay1 doesn't match, no1 matches, exits, probably 2ms\
-If we search for maybe, it will see yay1 doesn't match, no1 doesn't match, no2 doesn't match, ..., no6 doesn't match, not found so returns false and exits, probably 10ms
+`any()` uses linear search, if we search for `yay`, it will see the first item, it is yay, since this query found a matching item, regardless of there being another match later on `any()` will still return true, it exits early as a builtin optimization, lets say this search took **1ms**\
+If we search for `no`, it will see yay1 doesn't match, no1 matches, exits, probably **2ms**\
+If we search for `maybe`, it will see yay1 doesn't match, no1 doesn't match, no2 doesn't match, ..., no6 doesn't match, not found so returns false and exits, probably **10ms**
 
-As you can see, the earlier the match occurs, the faster the search is. And if there is no match, the search is very slow as it went through every item in the array. This time difference increase as the array size increases.\
-So, timing oracle is search for yay1 and it took 1ms, yay2 10ms (because not found), yay3 10ms, and so on. yay1 stands out for being significantly faster than the rest, so we know the value starts with 1\
+As you can see, the **earlier** the match occurs, the **faster** the search is. And if there is **no match**, the search is **very slow** as it went through every item in the array. This time difference increase as the array size increases.\
+So, timing oracle is search for yay1 and it took **1ms**, yay2 **10ms** (because not found), yay3 **10ms**, and so on. yay1 stands out for being significantly faster than the rest, so we know the value starts with **1**\
 Then, we search yay11 10ms, yay12 10ms, and so on. Since all of them are similarly slow, we know its either the array isn't big enough, or the value is literally 1.
 
 So, thats basically how timing oracle for linear search works
@@ -135,9 +135,7 @@ Now we can have the exploit flow
 5. Brute-force the internal flag one character at a time until we get a `}` (ie flag ends)
 6. Submit it to `/submit_flag` to receive the real flag.
 
-### details
-
-#### Step 1
+### Step 1
 
 ```bash
 for i in $(seq 1 10); do
@@ -147,7 +145,7 @@ done
 
 we can use this simple bash script to populate the flag list to 1M entries, thats enough to create some distinct time differences.
 
-#### Step 2
+### Step 2
 
 start a server using http.server
 
@@ -163,7 +161,7 @@ def start_server(state: State, html: bytes, port: int):
 
 And tunnel it to a public url
 
-#### Step 3 & 4
+### Step 3 & 4
 
 we can have this simple script to open a popup, and repeatedly navigate it to `http://localhost:5000/search?flag=<candidate>`
 
@@ -199,28 +197,30 @@ score(prefix + c) = probe(prefix + c + "!") - probe(prefix + c)
 
 The character with the highest score is the one we want.
 
-#### Step 5
+### Step 5
 
 Now, we can repeat the above method until we reach eof (end of flag aka `}` not end of file lol) to slowly get the full internal flag
 
 ```py
 while prefix[-1] != "}":
         prefix = run_one_round(prefix)
-        save_state({"prefix": prefix})
 ```
 
-#### Step 6
+### Step 6
 
 And since we have the full internal flag, we can submit it to `/submit_flag` to get our real flag
 
 ```py
-requests.get(f"http://chal.polyuctf.com:47263/submit_flag", params={"flag": flag}, timeout=20)
+requests.get(f"http://chal.polyuctf.com:47263/submit_flag", params={"flag": flag})
 ```
 
 ## The flow - checkpoint Q&A
 
 **Q - Why popup instead of fetch?**\
 A - `fetch()` with `no-cors` still sends cookie (Lax), but timing is noisy. Navigation timing via `while (try { void win.location.href } catch {})` gives a very clean signal of when the server responded.
+
+**Q - Why add `!` behind force miss attempts?**\
+A - Both the real flag and the fake flags consists of `0-9a-f{}lgkytf` (because leakyctf{hex} and flag{hex}), we CAN use any symbols that are not in that lil regex but for safety reason a symbol like `!` is fine.
 
 ## The Exploit
 
@@ -714,7 +714,7 @@ Open your tunnel address on your mobile with this QR:
 [02:35:50] sample prefix=leakyctf{4c2c16f08 delta=-0.60 hit=48.40 miss=47.80
 [02:35:54] sample prefix=leakyctf{4c2c16f09 delta=1.50 hit=48.00 miss=49.50
 [02:35:57] sample prefix=leakyctf{4c2c16f06 delta=1.40 hit=50.20 miss=51.60
-[02:36:00] sample prefix=leakyctf{4c2c16f0{ delta=30.70 hit=23.60 miss=54.30
+[02:36:00] sample prefix=leakyctf{4c2c16f0} delta=30.70 hit=23.60 miss=54.30
 [02:36:03] sample prefix=leakyctf{4c2c16f0e delta=1.60 hit=54.90 miss=56.50
 [02:36:06] sample prefix=leakyctf{4c2c16f0c delta=-1.90 hit=61.50 miss=59.60
 [02:36:10] sample prefix=leakyctf{4c2c16f05 delta=5.70 hit=60.80 miss=66.50
@@ -752,7 +752,7 @@ and also
 ## The Exploit - checkpoint Q&A
 
 **Q - Why so many repetitions and median?**\
-A - Author said "unstable" — single measurement often wrong. 3 reps + median + delta scoring made it reliable after a few runs.
+A - The timing is noisy because there are non-neglectable network jitter and the server load and etc. Its like doing an experiment we need to repeat a few times and average it (I median'd it here tho lol).
 
 **Q - Why `about:blank?reset=...` before each probe?**\
 A - Reset popup to known same-origin state so we can reliably detect cross-origin commit via `location.href` access throwing.
